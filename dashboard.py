@@ -168,7 +168,7 @@ with tab_sleep:
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 margin=dict(l=10, r=10, t=10, b=10), xaxis_title="minutes",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         else:
             st.caption("No sleep-stage data for the latest night.")
     with col_b:
@@ -204,16 +204,16 @@ with tab_training:
     if race:
         st.subheader("Race Predictions")
         race_df = pd.DataFrame(
-            [{"Distance": k, "Predicted Time": v} for k, v in race.items()]
+            [{"Distance": str(k), "Predicted Time": str(v)} for k, v in race.items()]
         )
-        st.dataframe(race_df, hide_index=True, use_container_width=True)
+        st.dataframe(race_df, hide_index=True, width="stretch")
 
     for label, key in [("Today's Activities", "activities_today"),
                        ("Yesterday's Activities", "activities_yesterday")]:
         acts = g.get(key) or []
         if acts:
             st.subheader(label)
-            st.dataframe(pd.DataFrame(acts), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(acts), hide_index=True, width="stretch")
 
     if not race and not (g.get("activities_today") or g.get("activities_yesterday")):
         st.caption("No training detail in the latest record.")
@@ -243,9 +243,9 @@ with tab_trends:
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     margin=dict(l=10, r=10, t=40, b=10),
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
         with st.expander("Raw 7-day data"):
-            st.dataframe(tdf, hide_index=True, use_container_width=True)
+            st.dataframe(tdf, hide_index=True, width="stretch")
     else:
         st.caption("No 7-day trend data in the latest record.")
 
@@ -282,7 +282,7 @@ with tab_labs:
             df = pd.DataFrame(
                 [{"Marker": k, "Value": v} for k, v in data.items()]
             )
-            st.dataframe(df, hide_index=True, use_container_width=True)
+            st.dataframe(df, hide_index=True, width="stretch")
 
         col_l, col_r = st.columns(2)
         with col_l:
