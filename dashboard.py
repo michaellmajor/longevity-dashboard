@@ -87,6 +87,41 @@ def fmt(value, suffix: str = "", dash: str = "—"):
     return f"{value}{suffix}"
 
 
+def _hms(seconds):
+    """Seconds -> M:SS / H:MM:SS (used as a fallback for old raw race data)."""
+    try:
+        total = int(round(float(seconds)))
+    except (TypeError, ValueError):
+        return None
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def race_rows(race: dict) -> list[dict]:
+    """Normalize race_predictions into [{Distance, Predicted Time}] rows.
+
+    Handles the clean format (keys 5k/10k/half_marathon/marathon, already
+    formatted strings) and the legacy raw format (time5K/... in seconds).
+    """
+    if not race:
+        return []
+    clean = {"5k": "5K", "10k": "10K", "half_marathon": "Half Marathon", "marathon": "Marathon"}
+    raw = {"time5K": "5K", "time10K": "10K", "timeHalfMarathon": "Half Marathon", "timeMarathon": "Marathon"}
+    rows = []
+    if any(k in race for k in clean):
+        for key, label in clean.items():
+            val = race.get(key)
+            if val:
+                rows.append({"Distance": label, "Predicted Time": str(val)})
+    elif any(k in race for k in raw):
+        for key, label in raw.items():
+            t = _hms(race.get(key))
+            if t:
+                rows.append({"Distance": label, "Predicted Time": t})
+    return rows
+
+
 # --------------------------------------------------------------------------- #
 # Load
 # --------------------------------------------------------------------------- #
@@ -184,29 +219,38 @@ with tab_sleep:
     r3.metric("Max Stress", fmt(recovery.get("max_stress")))
     r4.metric("Morning Readiness", fmt(recovery.get("morning_readiness")))
 
+    bal_low = hrv.get("baseline_balanced_low")
+    bal_high = hrv.get("baseline_balanced_upper")
+    balanced = f"{bal_low}–{bal_high} ms" if (bal_low is not None and bal_high is not None) else "N/A"
+
     h1, h2, h3, h4 = st.columns(4)
     h1.metric("HRV last night", fmt(hrv.get("last_night_avg_ms"), " ms"))
-    h2.metric("HRV 5-day avg", fmt(hrv.get("five_day_avg_ms"), " ms"))
-    h3.metric("HRV weekly high", fmt(hrv.get("weekly_high_ms"), " ms"))
-    h4.metric("HRV weekly low", fmt(hrv.get("weekly_low_ms"), " ms"))
+    h2.metric("HRV weekly avg", fmt(hrv.get("weekly_avg_ms"), " ms"))
+    h3.metric("Baseline (low)", fmt(hrv.get("baseline_low"), " ms"))
+    h4.metric("Baseline (balanced)", balanced)
 
 # --------------------------------------------------------------------------- #
 # Training
 # --------------------------------------------------------------------------- #
 with tab_training:
     t1, t2, t3, t4 = st.columns(4)
-    t1.metric("Training Load", fmt(training.get("training_load")), training.get("load_status") or None)
-    t2.metric("Fitness Age", fmt(training.get("fitness_age")))
-    t3.metric("Endurance Score", fmt(training.get("endurance_score")))
-    t4.metric("Hill Score", fmt(training.get("hill_score")))
+    t1.metric("Training Load (acute)", fmt(training.get("acute_load_7day"), dash="N/A"),
+              training.get("load_status") or None)
+    t2.metric("VO2 Max", fmt(training.get("vo2max_precise") or training.get("vo2max"), dash="N/A"))
+    t3.metric("Fitness Age", fmt(training.get("fitness_age"), dash="N/A"))
+    t4.metric("Acute:Chronic Ratio", fmt(training.get("acute_chronic_ratio"), dash="N/A"))
+
+    t5, t6, t7, t8 = st.columns(4)
+    t5.metric("Chronic Load", fmt(training.get("chronic_load_4week"), dash="N/A"))
+    t6.metric("Endurance Score", fmt(training.get("endurance_score"), dash="N/A"))
+    t7.metric("Hill Score", fmt(training.get("hill_score"), dash="N/A"))
+    t8.metric("Load Balance", fmt(training.get("load_balance"), dash="N/A"))
 
     race = training.get("race_predictions") or {}
-    if race:
+    rows = race_rows(race)
+    if rows:
         st.subheader("Race Predictions")
-        race_df = pd.DataFrame(
-            [{"Distance": str(k), "Predicted Time": str(v)} for k, v in race.items()]
-        )
-        st.dataframe(race_df, hide_index=True, width="stretch")
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
     for label, key in [("Today's Activities", "activities_today"),
                        ("Yesterday's Activities", "activities_yesterday")]:
@@ -215,7 +259,7 @@ with tab_training:
             st.subheader(label)
             st.dataframe(pd.DataFrame(acts), hide_index=True, width="stretch")
 
-    if not race and not (g.get("activities_today") or g.get("activities_yesterday")):
+    if not rows and not (g.get("activities_today") or g.get("activities_yesterday")):
         st.caption("No training detail in the latest record.")
 
 # --------------------------------------------------------------------------- #
@@ -226,9 +270,11 @@ with tab_trends:
     if trend:
         tdf = pd.DataFrame(trend).sort_values("date")
         series = [
-            ("sleep_score", "Sleep Score", GOOD),
             ("hrv_last_night_avg_ms", "HRV (ms)", "#7aa2f7"),
             ("resting_hr", "Resting HR (bpm)", WARN),
+            ("sleep_score", "Sleep Score", GOOD),
+            ("body_battery_at_wake", "Body Battery at Wake", "#b48ead"),
+            ("training_load", "Training Load (acute)", "#a3e635"),
         ]
         for col, title, color in series:
             if col in tdf and tdf[col].notna().any():
