@@ -1,0 +1,5 @@
+longevity.db
+*.pyc
+__pycache__
+.env
+last_garmin.json
